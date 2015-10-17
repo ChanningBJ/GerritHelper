@@ -24,7 +24,7 @@ setup(
     install_requires=dependencies,
     entry_points={
         'console_scripts': [
-            'gh-test = GerritHelper.cli:main',
+            'gh = GerritHelper.cli:main',
         ],
     },
     classifiers=[
