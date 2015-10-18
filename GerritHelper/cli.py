@@ -37,20 +37,36 @@ def start(branch, task, bug, feature):
         print "New branch %s created from %s" % (branch_name, branch)
 
 
+def squash_commits(orig_branch, repo, working_branch):
+    repo.git_checkout(orig_branch)
+    repo.git_branch('gerrit_tmp')
+    repo.git_checkout('gerrit_tmp')
+    print repo.git_command('merge', '--squash', working_branch)
+    if working_branch.startswith('B_'):
+        commit_message = open_editor('BUGFIX')
+    else:
+        commit_message = open_editor('FEATURE')
+    repo.git_commit(commit_message)
+    print repo.git_command('branch', '-M', working_branch)
+
+
 @main.command()
-def review():
+@click.option('--continue_review', '-c', is_flag=True, help='All conflicts have been fixed, continue sending the review')
+def review(continue_review):
+    if continue_review:
+        try:
+            repo = gitapi.Repo("./")
+            repo.git_command('rebase','--continue')
+            working_branch, orig_branch = extract_branch_name(repo)
+            squash_commits(orig_branch, repo, working_branch)
+            print repo.git_command('push','gerrit','HEAD:refs/publish/%s/%s%%r=%s' % (orig_branch, working_branch,'wangchengming')) # FIXME: change reviewer
+        except Exception:
+            return
+        return
+
     try:
         repo = gitapi.Repo("./")
-        branches = [ k for k in repo.git_command('branch').split('\n') if k.startswith('*')]
-        if len(branches) != 1 :
-            print "Not in any branch ?"
-            return
-        working_branch = branches[0].replace('* ','')
-        items = working_branch.split('_')
-        if len(items)!=3:
-            print working_branch,'not created using gh tool, should not send to review using gh tool'
-            return
-        orig_branch = items[1]
+        working_branch, orig_branch = extract_branch_name(repo)
 
         repo.git_checkout(orig_branch)
         try:
@@ -74,19 +90,9 @@ def review():
                         line.startswith('rebase in progress'):
                     continue
                 print line
-            print 'Fix conflicts and run "gh review continue"'
+            print 'Fix conflicts and run "gh review -c"'
             return
-
-        repo.git_checkout(orig_branch)
-        repo.git_branch('gerrit_tmp')
-        repo.git_checkout('gerrit_tmp')
-        print repo.git_command('merge', '--squash', working_branch)
-        if working_branch.startswith('B_'):
-            commit_message = open_editor('BUGFIX')
-        else:
-            commit_message = open_editor('FEATURE')
-        repo.git_commit(commit_message)
-        print repo.git_command('branch','-M',working_branch)
+        squash_commits(orig_branch, repo, working_branch)
         print repo.git_command('push','gerrit','HEAD:refs/publish/%s/%s%%r=%s' % (orig_branch, working_branch,'wangchengming')) # FIXME: change reviewer
     except GitException,e:
         print e.message
@@ -102,8 +108,18 @@ def add(filename):
         print e.message
 
 
-
-
+def extract_branch_name(repo):
+    branches = [ k for k in repo.git_command('branch').split('\n') if k.startswith('*')]
+    if len(branches) != 1 :
+        print "Not in any branch ?"
+        return
+    working_branch = branches[0].replace('* ','')
+    items = working_branch.split('_')
+    if len(items)!=3:
+        print working_branch,'not created using gh tool, should not send to review using gh tool'
+        return
+    orig_branch = items[1]
+    return working_branch, orig_branch
 
 def open_editor(title):
     EDITOR = os.environ.get('EDITOR','vim') #that easy!
