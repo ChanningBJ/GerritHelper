@@ -53,9 +53,30 @@ def review():
         orig_branch = items[1]
 
         repo.git_checkout(orig_branch)
-        # repo.git_pull() #FIXME: pull may fail
+        try:
+            repo.git_pull()
+        except Exception: # pull failure, rollback
+            print 'Failed update '+orig_branch+' from remote repo'
+            repo.git_checkout(working_branch)
+            return
         repo.git_checkout(working_branch)
-        print repo.git_command('rebase', orig_branch) # may fail
+        try:
+            print repo.git_command('rebase', orig_branch) # may fail
+        except Exception:
+            print "Failed rebasing %s from %s" % (working_branch,orig_branch)
+            print ""
+            stat = repo.git_command('status')
+            for line in stat.split('\n'):
+                if line.startswith('You') or \
+                        line.startswith('  (') or \
+                        line.startswith('Unmerged') or \
+                        line.startswith('no changes') or \
+                        line.startswith('rebase in progress'):
+                    continue
+                print line
+            print 'Fix conflicts and run "gh review continue"'
+            return
+
         repo.git_checkout(orig_branch)
         repo.git_branch('gerrit_tmp')
         repo.git_checkout('gerrit_tmp')
@@ -79,6 +100,7 @@ def add(filename):
         print repo.git_add(filename)
     except GitException,e:
         print e.message
+
 
 
 
