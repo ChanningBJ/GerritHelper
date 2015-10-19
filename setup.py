@@ -5,7 +5,8 @@ from setuptools import find_packages, setup
 
 dependencies = [
     'click',
-    'gitapi'
+    'gitapi',
+    'simplediff'
 ]
 
 setup(

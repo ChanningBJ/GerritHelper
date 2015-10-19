@@ -8,6 +8,7 @@ import os
 from subprocess import call
 from gitapi.gitapi import GitException
 import time
+import diff2html
 
 
 @click.group()
@@ -106,6 +107,24 @@ def add(filename):
         print repo.git_add(filename)
     except GitException,e:
         print e.message
+
+
+@main.command()
+def diff():
+    # try:
+    repo = gitapi.Repo("./")
+    tmp_html_file = os.path.join(tempfile.gettempdir(),'gell.html')
+    tmp_diff_file = os.path.join(tempfile.gettempdir(),'gell.diff')
+    os.system('git diff -U99999999 B_master_fix5 master > '+tmp_diff_file)
+    # result = repo.git_command('diff','-U99999999','B_master_fix5','master')
+    # with tempfile.NamedTemporaryFile(suffix=".tmp",mode='w+') as temp_fp:
+    #     temp_fp.write(result)
+    #     temp_fp.flush()
+    #     tmp_html_file = os.path.join(tempfile.gettempdir(),'gell.html')
+    diff2html.make_diff_html(tmp_diff_file,tmp_html_file)
+    print tmp_html_file
+    # except Exception,e:
+    #     print e.message
 
 
 def extract_branch_name(repo):
