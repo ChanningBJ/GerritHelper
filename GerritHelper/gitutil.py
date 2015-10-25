@@ -20,11 +20,11 @@ def squash_commits(repo, working_branch, orig_branch, max_commit_history=100):
             common_commit = commit
             break
     if common_commit is None:
-        return "Branch %s and %s have no common commit in nearest %d commits" % (working_branch,orig_branch,max_commit_history)
+        raise Exception("Branch %s and %s have no common commit in nearest %d commits" % (working_branch,orig_branch,max_commit_history))
 
     commit_count = working_branch_commits.index(common_commit)
     if commit_count==0:
-        return "HEAD of branch %s and %s are at the same point" % (working_branch,orig_branch)
+        raise Exception("HEAD of branch %s and %s are at the same point" % (working_branch,orig_branch))
     commit_history = repo.git_command('rev-list','--format=full','--max-count='+str(commit_count),working_branch_commits[0]).strip().split('\n')
 
     repo.git_command('reset','--soft',common_commit)
@@ -33,7 +33,6 @@ def squash_commits(repo, working_branch, orig_branch, max_commit_history=100):
     else:
         commit_message = open_editor('FEATURE',commit_history)
     repo.git_commit(commit_message)
-    return None
 
 
 def open_editor(branch_type, msg):

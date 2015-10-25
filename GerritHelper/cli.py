@@ -1,4 +1,5 @@
 import click
+import exceptions
 import gitapi
 import webbrowser
 import sys
@@ -11,6 +12,8 @@ from gitapi.gitapi import GitException
 import time
 import diff2html
 
+
+# TODO: if already sent to review, squash and amemd
 
 @click.group()
 def main():
@@ -67,35 +70,28 @@ def review():
                 repo.git_command('rebase','--continue')
                 # working_branch, orig_branch = extract_branch_name(repo)
                 # gitutil.squash_commits(repo,working_branch,orig_branch)
-                # print repo.git_command('push','gerrit','HEAD:refs/publish/%s/%s%%r=%s' % (orig_branch, working_branch,'wangchengming')) # FIXME: comment out for test
+                print repo.git_command('push','gerrit','HEAD:refs/publish/%s/%s%%r=%s' % (orig_branch, working_branch,'wangchengming'))
             except GitException,e:
                 print e.message
             return
 
         try:
             # working_branch, orig_branch = extract_branch_name(repo)
-            print_status_start('Update %s branch' % (orig_branch))
-            repo.git_checkout(orig_branch)
-            # try:   # FIXME: comment out for test
-            #     repo.git_pull()
-            # except Exception: # pull failure, rollback
-            #     print 'Failed update '+orig_branch+' from remote repo'
-            #     repo.git_checkout(working_branch)
-            #     return
-            print_status_end('Update %s branch' % (orig_branch),True)
+            with Step('Update %s branch' % (orig_branch)):
+                repo.git_checkout(orig_branch)
+                try:
+                    repo.git_pull()
+                except Exception: # pull failure, rollback
+                    print 'Failed update '+orig_branch+' from remote repo'
+                    repo.git_checkout(working_branch)
+                    return
             repo.git_checkout(working_branch)
-            print_status_start('Squash commits')
-            result = gitutil.squash_commits(repo,working_branch,orig_branch)
-            if result is not None:
-                print result
-                print_status_end('Squash commits',False)
-                return
-            else:
-                print_status_end('Squash commits',True)
+            with Step('Squash commits'):
+                gitutil.squash_commits(repo,working_branch,orig_branch)
+
             try:
-                print_status_start('Rebasing')
-                repo.git_command('rebase', orig_branch) # may fail
-                print_status_end('Rebasing',True)
+                with Step("Rebasing"):
+                    repo.git_command('rebase', orig_branch) # may fail
             except Exception:
                 print "Failed rebasing %s from %s" % (working_branch,orig_branch)
                 print ""
@@ -111,10 +107,10 @@ def review():
                 print 'Fix conflicts and run "gh review" again'
                 return
             # gitutil.squash_commits(repo,working_branch,orig_branch)
-            # print repo.git_command('push','gerrit','HEAD:refs/publish/%s/%s%%r=%s' % (orig_branch, working_branch,'wangchengming')) # FIXME: comment out for test
-        except GitException,e:
+            print repo.git_command('push','gerrit','HEAD:refs/publish/%s/%s%%r=%s' % (orig_branch, working_branch,'wangchengming'))
+        except Exception,e:
             print e.message
-    except GitException,e:
+    except Exception,e:
         print e.message
 
 
@@ -193,15 +189,16 @@ The detailed message
     # do the parsing with `tempfile` using regular File operations
 
 
-def print_status_start(message):
-    print '%-30s' % (message),
 
+class Step():
+    def __init__(self, msg):
+        self.msg = msg
 
-def print_status_end(message,success):
-    if success:
-        print '%10s' % '[OK]'
-    else:
-        print '\n%-30s%10s' % (message,'[FAILURE]')
+    def __enter__(self):
+        print '%-30s' % (self.msg),
 
-if __name__ == '__main__':
-    print open_editor('BUGFIX')
+    def __exit__(self, type, value, traceback):
+        if type is not None:
+            print '\n%-30s%10s' % (self.msg,'[FAILURE]')
+        else:
+            print '%10s' % '[OK]'
