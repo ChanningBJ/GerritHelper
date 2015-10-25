@@ -33,8 +33,7 @@ def squash_commits(repo, working_branch, orig_branch, max_commit_history=100):
     else:
         commit_message = open_editor('FEATURE',commit_history)
     repo.git_commit(commit_message)
-    print repo.git_command('branch', '-M', working_branch)
-
+    return None
 
 
 def open_editor(branch_type, msg):

@@ -74,7 +74,7 @@ def review():
 
         try:
             # working_branch, orig_branch = extract_branch_name(repo)
-
+            print_status_start('Update %s branch' % (orig_branch))
             repo.git_checkout(orig_branch)
             # try:   # FIXME: comment out for test
             #     repo.git_pull()
@@ -82,10 +82,20 @@ def review():
             #     print 'Failed update '+orig_branch+' from remote repo'
             #     repo.git_checkout(working_branch)
             #     return
+            print_status_end('Update %s branch' % (orig_branch),True)
             repo.git_checkout(working_branch)
-            gitutil.squash_commits(repo,working_branch,orig_branch)
+            print_status_start('Squash commits')
+            result = gitutil.squash_commits(repo,working_branch,orig_branch)
+            if result is not None:
+                print result
+                print_status_end('Squash commits',False)
+                return
+            else:
+                print_status_end('Squash commits',True)
             try:
-                print repo.git_command('rebase', orig_branch) # may fail
+                print_status_start('Rebasing')
+                repo.git_command('rebase', orig_branch) # may fail
+                print_status_end('Rebasing',True)
             except Exception:
                 print "Failed rebasing %s from %s" % (working_branch,orig_branch)
                 print ""
@@ -181,5 +191,17 @@ The detailed message
         # print temp_fp.read()
 
     # do the parsing with `tempfile` using regular File operations
+
+
+def print_status_start(message):
+    print '%-30s' % (message),
+
+
+def print_status_end(message,success):
+    if success:
+        print '%10s' % '[OK]'
+    else:
+        print '\n%-30s%10s' % (message,'[FAILURE]')
+
 if __name__ == '__main__':
     print open_editor('BUGFIX')
