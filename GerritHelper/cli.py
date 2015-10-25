@@ -1,8 +1,9 @@
 import click
 import gitapi
+import webbrowser
 import sys
 import tabulate
-
+import gitutil
 import tempfile
 import os
 from subprocess import call
@@ -52,49 +53,57 @@ def squash_commits(orig_branch, repo, working_branch):
 
 
 @main.command()
-@click.option('--continue_review', '-c', is_flag=True, help='All conflicts have been fixed, continue sending the review')
-def review(continue_review):
-    if continue_review:
-        try:
-            repo = gitapi.Repo("./")
-            repo.git_command('rebase','--continue')
-            working_branch, orig_branch = extract_branch_name(repo)
-            squash_commits(orig_branch, repo, working_branch)
-            print repo.git_command('push','gerrit','HEAD:refs/publish/%s/%s%%r=%s' % (orig_branch, working_branch,'wangchengming')) # FIXME: change reviewer
-        except Exception:
-            return
-        return
+def review():
+    repo = gitapi.Repo("./")
+    working_branch, orig_branch = extract_branch_name(repo)
 
     try:
-        repo = gitapi.Repo("./")
-        working_branch, orig_branch = extract_branch_name(repo)
+        if 'rebasing' in repo.git_command('status'):
+            print 'Current repo is in rebase progress'
+            try:
+                print repo.git_command('status')
+                repo.git_command('add','-u')
+                print repo.git_command('status')
+                repo.git_command('rebase','--continue')
+                # working_branch, orig_branch = extract_branch_name(repo)
+                # gitutil.squash_commits(repo,working_branch,orig_branch)
+                # print repo.git_command('push','gerrit','HEAD:refs/publish/%s/%s%%r=%s' % (orig_branch, working_branch,'wangchengming')) # FIXME: comment out for test
+            except GitException,e:
+                print e.message
+            return
 
-        repo.git_checkout(orig_branch)
         try:
-            repo.git_pull()
-        except Exception: # pull failure, rollback
-            print 'Failed update '+orig_branch+' from remote repo'
+            # working_branch, orig_branch = extract_branch_name(repo)
+
+            repo.git_checkout(orig_branch)
+            # try:   # FIXME: comment out for test
+            #     repo.git_pull()
+            # except Exception: # pull failure, rollback
+            #     print 'Failed update '+orig_branch+' from remote repo'
+            #     repo.git_checkout(working_branch)
+            #     return
             repo.git_checkout(working_branch)
-            return
-        repo.git_checkout(working_branch)
-        try:
-            print repo.git_command('rebase', orig_branch) # may fail
-        except Exception:
-            print "Failed rebasing %s from %s" % (working_branch,orig_branch)
-            print ""
-            stat = repo.git_command('status')
-            for line in stat.split('\n'):
-                if line.startswith('You') or \
-                        line.startswith('  (') or \
-                        line.startswith('Unmerged') or \
-                        line.startswith('no changes') or \
-                        line.startswith('rebase in progress'):
-                    continue
-                print line
-            print 'Fix conflicts and run "gh review -c"'
-            return
-        squash_commits(orig_branch, repo, working_branch)
-        print repo.git_command('push','gerrit','HEAD:refs/publish/%s/%s%%r=%s' % (orig_branch, working_branch,'wangchengming')) # FIXME: change reviewer
+            gitutil.squash_commits(repo,working_branch,orig_branch)
+            try:
+                print repo.git_command('rebase', orig_branch) # may fail
+            except Exception:
+                print "Failed rebasing %s from %s" % (working_branch,orig_branch)
+                print ""
+                stat = repo.git_command('status')
+                for line in stat.split('\n'):
+                    if line.startswith('You') or \
+                            line.startswith('  (') or \
+                            line.startswith('Unmerged') or \
+                            line.startswith('no changes') or \
+                            line.startswith('rebase in progress'):
+                        continue
+                    print line
+                print 'Fix conflicts and run "gh review" again'
+                return
+            # gitutil.squash_commits(repo,working_branch,orig_branch)
+            # print repo.git_command('push','gerrit','HEAD:refs/publish/%s/%s%%r=%s' % (orig_branch, working_branch,'wangchengming')) # FIXME: comment out for test
+        except GitException,e:
+            print e.message
     except GitException,e:
         print e.message
 
@@ -115,14 +124,14 @@ def diff():
     repo = gitapi.Repo("./")
     tmp_html_file = os.path.join(tempfile.gettempdir(),'gell.html')
     tmp_diff_file = os.path.join(tempfile.gettempdir(),'gell.diff')
-    os.system('git diff -U99999999 B_master_fix5 master > '+tmp_diff_file)
+    os.system('git diff -U50 B_master_fix5 master > '+tmp_diff_file)
     # result = repo.git_command('diff','-U99999999','B_master_fix5','master')
     # with tempfile.NamedTemporaryFile(suffix=".tmp",mode='w+') as temp_fp:
     #     temp_fp.write(result)
     #     temp_fp.flush()
     #     tmp_html_file = os.path.join(tempfile.gettempdir(),'gell.html')
     diff2html.make_diff_html(tmp_diff_file,tmp_html_file)
-    print tmp_html_file
+    webbrowser.open('file://'+tmp_html_file)
     # except Exception,e:
     #     print e.message
 
