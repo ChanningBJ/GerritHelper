@@ -1,6 +1,44 @@
+import gitapi
 import os
 import tempfile
 from subprocess import call
+
+class GitRepoAdapter:
+
+    GULL_STAT_PUSHED = 1 # already pushed to gerrit for review
+
+    def __init__(self,working_branch,orig_branch,repo_path):
+        self.__repo_path = repo_path
+        self.__gull_root = os.path.join(repo_path,'.gull')
+        if not os.path.exists(self.__gull_root):
+            os.makedirs(self.__gull_root)
+        self.__working_branch = working_branch
+        self.__orig_branch = orig_branch
+        self.__repo = gitapi.Repo(repo_path)
+
+    def __get_commits(self,branch_name):
+        return self.__repo.git_command('rev-list','-n','100',branch_name).strip().split('\n')
+
+    def __get_review_commit(self):
+        if os.path.exists(os.path.join(self.__gull_root,self.__working_branch)):
+            with open(os.path.join(self.__gull_root,self.__working_branch)) as fp:
+                return fp.readline().strip()
+
+    def get_gull_status(self):
+        review_commit = self.__get_review_commit()
+        head = self.__get_commits(self.__working_branch)[0]
+        if head==review_commit:
+            return GitRepoAdapter.GULL_STAT_PUSHED
+        return -1
+
+    def push_to_gerrit(self):
+        self.__repo.git_checkout(self.__working_branch)
+        # TODO: push
+        head = self.__get_commits(self.__working_branch)[0]
+        with open(os.path.join(self.__gull_root,self.__working_branch),'w') as fp:
+            fp.write(head)
+
+
 
 
 def squash_commits(repo, working_branch, orig_branch, max_commit_history=100):
@@ -72,3 +110,8 @@ The detailed message
             # temp_fp.flush()
             # temp_fp.seek(0,0)
             # print temp_fp.read()
+
+
+if __name__ == '__main__':
+    g = GitRepoAdapter('BUGFIX_master_1234','master','/Users/susuxixi/Documents/projects/test/Fusion')
+    print g.get_gull_status()
